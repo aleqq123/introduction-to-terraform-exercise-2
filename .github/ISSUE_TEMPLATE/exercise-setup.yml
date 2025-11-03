@@ -1,0 +1,52 @@
+name: Exercise Setup
+description: Choose your preferred tool for the Introduction to Terraform exercise
+title: "[Setup] Exercise Configuration"
+labels: ["setup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Exercise Configuration
+
+        Configure your personalized learning experience by selecting your preferences below. 
+
+        When you create the issue, Mona will pick it up and guide you forward!
+
+  - type: dropdown
+    id: tf_tool
+    attributes:
+      label: 🛠️ Preferred Tool
+      description: Select the Infrastructure as Code tool you'd like to use for this exercise
+      options:
+        - terraform
+        - opentofu
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: 📊 Difficulty Level
+      description: Choose your preferred difficulty level. Beginner's will get more tips along the way.
+      options:
+        - beginner
+        - intermediate
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: 🌐 Language
+      description: Choose the language for exercise content.
+      options:
+        - english
+        - portuguese
+        - spanish
+        - french
+        - japanese
+      default: 0
+    validations:
+      required: true

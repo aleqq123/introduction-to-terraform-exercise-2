@@ -1,0 +1,153 @@
+name: Step 0 # Start Exercise
+
+on:
+  issues:
+    types: [opened]
+
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+env:
+  STEP_1_FILE: ".github/steps/1-step.md"
+
+jobs:
+  check_issue:
+    if: contains(github.event.issue.title, 'configuration')
+    name: Check Issue Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      configuration: ${{ steps.parser.outputs.json }}
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Parse Issue
+        id: parser
+        uses: issue-ops/parser@v4
+        with:
+          issue-form-template: exercise-setup.yml
+
+      - name: Checkout for templates
+        uses: actions/checkout@v5
+
+      - name: Mention the issue is being prepared
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ github.repository }}
+          issue-number: ${{ github.event.issue.number }}
+          file: .github/markdown-templates/step-feedback/preparing-exercise.md
+          vars: |
+            login: ${{ github.actor }}
+
+  start_exercise:
+    if: |
+      !github.event.repository.is_template
+    name: Start Exercise
+    needs: [check_issue]
+    uses: skills/exercise-toolkit/.github/workflows/start-exercise.yml@report-issues-link
+    with:
+      exercise-title: "Introduction to Terraform"
+      intro-message: "Learn Infrastructure as Code fundamentals with Terraform and the GitHub provider"
+
+  # this could be part of the start_exercise workflow, keeping separate for now as a poc
+  add_state_labels:
+    name: Add state labels
+    needs: [start_exercise, check_issue]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add Labels
+        id: add-labels
+        uses: issue-ops/labeler@v3
+        with:
+          action: add
+          issue_number: ${{ needs.start_exercise.outputs.issue-number }}
+          labels: |
+            state::tf_tool::${{ fromJson(needs.check_issue.outputs.configuration).tf_tool[0] }}
+            state::difficulty::${{ fromJson(needs.check_issue.outputs.configuration).difficulty[0] }}
+            state::language::${{ fromJson(needs.check_issue.outputs.configuration).language[0] }}
+
+  post_next_step_content:
+    name: Post next step content
+    runs-on: ubuntu-latest
+    needs: [start_exercise, add_state_labels]
+    env:
+      ISSUE_NUMBER: ${{ needs.start_exercise.outputs.issue-number }}
+      ISSUE_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Get response templates
+        uses: actions/checkout@v5
+        with:
+          repository: skills/exercise-toolkit
+          path: exercise-toolkit
+          ref: v0.7.0
+
+      - name: Extract state labels
+        id: extract-state
+        uses: FidelusAleksander/state-labels@v1
+        with:
+          operation: get-all
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          repository: ${{ env.ISSUE_REPOSITORY }}
+            
+      - name: Create comment - add step content
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          file: ${{ env.STEP_1_FILE }}
+          vars: |
+            login: ${{ github.actor }}
+            full_repo_name: ${{ github.repository }}
+            tf_tool: ${{ fromJson(steps.extract-state.outputs.state).tf_tool }}
+
+
+      - name: Create comment - watching for progress
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ env.ISSUE_NUMBER }}
+          file: exercise-toolkit/markdown-templates/step-feedback/watching-for-progress.md
+
+      - name: Enable next step workflow
+        run: |
+          gh workflow enable "Step 1"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  close_configuration_issue:
+    name: Close Configuration Issue
+    runs-on: ubuntu-latest
+    needs: [check_issue, start_exercise]
+    env:
+      ISSUE_REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Get response templates
+        uses: actions/checkout@v5
+        with:
+          repository: skills/exercise-toolkit
+          path: exercise-toolkit
+          ref: v0.7.0
+
+      - name: Create comment - exercise ready
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          repository: ${{ env.ISSUE_REPOSITORY }}
+          issue-number: ${{ github.event.issue.number }}
+          file: exercise-toolkit/markdown-templates/readme/exercise-started.md
+          vars: |
+            title: "Introduction to Terraform"
+            login: ${{ github.actor }}
+            issue_url: ${{ needs.start_exercise.outputs.issue-url }}
+
+
+      - name: Close configuration issue
+        run: gh issue close ${{ github.event.issue.number }} --repo ${{ env.ISSUE_REPOSITORY }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

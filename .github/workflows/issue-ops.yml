@@ -1,0 +1,55 @@
+name: Issue Ops Commands
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  command:
+    name: Issue Command
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      
+      - name: Get active step workflow
+        id: step-info
+        uses: skills/exercise-toolkit/actions/active-step-workflow@get-current-step-action
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract state labels
+        id: difficulty
+        uses: FidelusAleksander/state-labels@v1
+        with:
+          operation: get
+          key: difficulty
+          issue-number: ${{ github.event.issue.number }}
+          repository: ${{ github.repository }}
+
+      - uses: github/command@v2.0.1
+        id: hint-command
+        with:
+          command: ".hint"
+          allowed_contexts: issue
+          reaction: "eyes"
+
+      - name: Comment with hint
+        if: ${{ steps.hint-command.outputs.continue == 'true' && steps.difficulty.outputs.value == 'beginner' }}
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          file: .github/hints/${{ steps.step-info.outputs.current-step }}.md
+
+      - name: Comment if not beginner
+        if: ${{ steps.hint-command.outputs.continue == 'true' && steps.difficulty.outputs.value != 'beginner' }}
+        uses: GrantBirki/comment@v2.1.1
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          file: .github/hints/not-eligible.md
+
